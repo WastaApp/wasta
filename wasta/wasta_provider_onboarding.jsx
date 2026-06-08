@@ -102,15 +102,18 @@ export default function ProviderOnboarding(){
       }]).select().single();
       if(pErr)throw pErr;
 
-      // Upload docs in background (non-blocking)
-try {
-  const uploads=[];
-  if(files.emiratesId) uploads.push(uploadDoc(provider.id,"emirates_id",files.emiratesId));
-  if(files.tradeLicense) uploads.push(uploadDoc(provider.id,"trade_license",files.tradeLicense));
-  if(files.photo) uploads.push(uploadDoc(provider.id,"photo",files.photo));
-  Promise.all(uploads).catch(err=>console.log("Upload error:",err));
-} catch(e) { console.log("Upload skipped:",e); }
-        setSubmitted(true);
+      // Upload docs in parallel
+      const uploads=[];
+      if(files.emiratesId) uploads.push(uploadDoc(provider.id,"emirates_id",files.emiratesId));
+      if(files.tradeLicense) uploads.push(uploadDoc(provider.id,"trade_license",files.tradeLicense));
+      if(files.photo) uploads.push(
+        uploadDoc(provider.id,"photo",files.photo).then(async path=>{
+          const {data:{publicUrl}}=supabase.storage.from("wasta-docs").getPublicUrl(path);
+          await supabase.from("providers").update({photo_url:publicUrl}).eq("id",provider.id);
+        })
+      );
+      await Promise.all(uploads);
+      setSubmitted(true);
     } catch(err){
       setSubmitError(err.message);
     } finally{
